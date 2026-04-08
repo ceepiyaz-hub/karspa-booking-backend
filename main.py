@@ -35,9 +35,6 @@ def vehicle_detect(data: dict):
 
     text = str(data.get("vehicle_model", "")).lower().strip()
 
-    if text == "":
-        return {"status": "not_found"}
-
     for _, row in vehicle_df.iterrows():
 
         keywords = str(row["Model Keywords"]).lower()
@@ -46,13 +43,12 @@ def vehicle_detect(data: dict):
             if keyword.strip() in text:
 
                 return {
-                    "status": "found",
                     "brand": row["Car Brands"],
                     "model": row["Car Models"],
                     "category": row["Car Category"]
                 }
 
-    return {"status": "not_found"}
+    return {"error": "vehicle not found"}
 
 
 # ---------------- PRICE LOOKUP ----------------
