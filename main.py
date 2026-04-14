@@ -62,12 +62,16 @@ def price_check(data: dict):
     if pricing_df is None:
         return {"error": "pricing database missing"}
 
+    if duration_df is None:
+        return {"error": "service duration database missing"}
+
     category = data.get("vehicle_category")
     service = data.get("service_selected")
 
     if category is None or service is None:
         return {"error": "vehicle_category and service_selected required"}
 
+    # -------- FIND PRICE --------
     row = pricing_df[pricing_df["Car Category"] == category]
 
     if row.empty:
@@ -78,14 +82,38 @@ def price_check(data: dict):
 
     try:
         price = row.iloc[0][service]
-
-        # convert numpy to python int
         price = int(price)
-
     except Exception as e:
         return {"error": str(e)}
 
-    return {"price": price}
+    # -------- FIND SERVICE DETAILS --------
+    service_row = duration_df[duration_df["Service Name"] == service]
+
+    if service_row.empty:
+        duration = None
+        description = ""
+        highlights = ""
+    else:
+        duration = service_row.iloc[0]["Duration (Hours)"]
+        description = service_row.iloc[0]["Description"]
+        highlights = service_row.iloc[0]["Key Highlights"]
+
+    # convert duration safely
+    try:
+        duration = int(duration)
+    except:
+        duration = None
+
+    # -------- RESPONSE --------
+    return {
+        "status": "success",
+        "service": service,
+        "vehicle_category": category,
+        "price": price,
+        "duration_hours": duration,
+        "description": description,
+        "highlights": highlights
+    }
 
 
 # ---------------- SLOT CHECK ----------------
