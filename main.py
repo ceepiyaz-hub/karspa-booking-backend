@@ -3,32 +3,32 @@ from fastapi import FastAPI
 import pandas as pd
 import uuid
 from datetime import datetime, timedelta
+import math
 
 app = FastAPI()
 
 DATABASE_FILE = "database.xlsx"
 
+# ---------- SYSTEM CONFIG ----------
+SLOTS = ["09:30","12:30","15:30","18:00"]
+SLOT_CAPACITY = 3   # number of detailing bays
+SLOT_DURATION_HOURS = 3   # each slot roughly 3 hours
+
 # ---------------- LOAD DATABASE ----------------
-try:
+def load_database():
     vehicle_df = pd.read_excel(DATABASE_FILE, sheet_name="Vehicle_Database")
     pricing_df = pd.read_excel(DATABASE_FILE, sheet_name="Pricing_Matrix")
     duration_df = pd.read_excel(DATABASE_FILE, sheet_name="Service_Duration")
     bookings_df = pd.read_excel(DATABASE_FILE, sheet_name="Bookings")
 
-    # Clean column names
     vehicle_df.columns = vehicle_df.columns.str.strip()
     pricing_df.columns = pricing_df.columns.str.strip()
     duration_df.columns = duration_df.columns.str.strip()
     bookings_df.columns = bookings_df.columns.str.strip()
 
-    print("Database loaded successfully")
+    return vehicle_df, pricing_df, duration_df, bookings_df
 
-except Exception as e:
-    print("Database load error:", e)
-    vehicle_df = None
-    pricing_df = None
-    duration_df = None
-    bookings_df = None
+vehicle_df, pricing_df, duration_df, bookings_df = load_database()
 
 
 @app.get("/")
@@ -40,15 +40,12 @@ def home():
 @app.post("/api/vehicle-detect")
 def vehicle_detect(data: dict):
 
-    if vehicle_df is None:
-        return {"error": "vehicle database missing"}
-
-    text = str(data.get("vehicle_model", "")).lower().strip()
+    text = str(data.get("vehicle_model","")).lower().strip()
 
     if text == "":
-        return {"status": "not_found"}
+        return {"status":"not_found"}
 
-    for _, row in vehicle_df.iterrows():
+    for _,row in vehicle_df.iterrows():
 
         keywords = str(row["Model Keywords"]).lower()
 
@@ -56,105 +53,119 @@ def vehicle_detect(data: dict):
             if keyword.strip() in text:
 
                 return {
-                    "status": "found",
-                    "brand": row["Car Brands"],
-                    "model": row["Car Models"],
-                    "category": row["Car Category"]
+                    "status":"found",
+                    "brand":row["Car Brands"],
+                    "model":row["Car Models"],
+                    "category":row["Car Category"]
                 }
 
-    return {"status": "not_found"}
+    return {"status":"not_found"}
 
 
 # ---------------- PRICE LOOKUP ----------------
 @app.post("/api/price-check")
 def price_check(data: dict):
 
-    if pricing_df is None:
-        return {"error": "pricing database missing"}
-
-    if duration_df is None:
-        return {"error": "service duration database missing"}
-
     category = data.get("vehicle_category")
     service = data.get("service_selected")
-
-    if category is None or service is None:
-        return {"error": "vehicle_category and service_selected required"}
 
     row = pricing_df[pricing_df["Car Category"] == category]
 
     if row.empty:
-        return {"error": f"category '{category}' not found"}
+        return {"error":"category not found"}
 
-    if service not in pricing_df.columns:
-        return {"error": f"service '{service}' column not found"}
-
-    try:
-        price = int(row.iloc[0][service])
-    except Exception as e:
-        return {"error": str(e)}
+    price = int(row.iloc[0][service])
 
     service_row = duration_df[duration_df["Service Name"] == service]
 
-    if service_row.empty:
-        duration = None
-        description = ""
-        highlights = ""
-    else:
-        duration = service_row.iloc[0]["Duration (Hours)"]
-        description = service_row.iloc[0]["Description"]
-        highlights = service_row.iloc[0]["Key Highlights"]
-
-    try:
-        duration = int(duration)
-    except:
-        duration = None
+    duration = int(service_row.iloc[0]["Duration (Hours)"])
+    description = service_row.iloc[0]["Description"]
+    highlights = service_row.iloc[0]["Key Highlights"]
 
     return {
-        "status": "success",
-        "service": service,
-        "vehicle_category": category,
-        "price": price,
-        "duration_hours": duration,
-        "description": description,
-        "highlights": highlights
+        "status":"success",
+        "price":price,
+        "duration_hours":duration,
+        "description":description,
+        "highlights":highlights
     }
 
 
-# ---------------- SLOT CHECK (SMART SLOT SYSTEM) ----------------
+# ---------------- SMART SLOT ENGINE (DURATION AWARE) ----------------
 @app.post("/api/slot-check")
 def slot_check(data: dict):
 
-    if bookings_df is None:
-        return {"error": "booking database missing"}
+    # reload bookings every request
+    bookings_df = pd.read_excel(DATABASE_FILE, sheet_name="Bookings")
+    bookings_df["Date"] = pd.to_datetime(bookings_df["Date"]).dt.date
 
-    slots = ["09:30", "12:30", "15:30", "18:00"]
-    slot_capacity = 3  # 3 detailing bays
+    now = datetime.now()
+    today = now.date()
 
-    offset = int(data.get("day_offset", 0))
+    service_name = data.get("service_selected")
 
-    booking_date = datetime.now().date() + timedelta(days=offset)
+    # determine service duration
+    service_row = duration_df[duration_df["Service Name"] == service_name]
+    duration_hours = int(service_row.iloc[0]["Duration (Hours)"])
 
-    # Convert date column properly
-    df = bookings_df.copy()
-    df["Date"] = pd.to_datetime(df["Date"]).dt.date
+    # calculate how many slots needed
+    slots_needed = max(1, math.ceil(duration_hours / SLOT_DURATION_HOURS))
 
-    day_bookings = df[df["Date"] == booking_date]
+    offset = int(data.get("day_offset",0))
+    start_date = today + timedelta(days=offset)
 
-    available_slots = []
+    for day in range(7):
 
-    for slot in slots:
-        slot_count = len(day_bookings[day_bookings["Time"] == slot])
+        check_date = start_date + timedelta(days=day)
+        day_bookings = bookings_df[bookings_df["Date"] == check_date]
 
-        if slot_count < slot_capacity:
-            available_slots.append(slot)
+        available_slots = []
+
+        for i,slot in enumerate(SLOTS):
+
+            # check if enough continuous slots exist
+            required_slots = SLOTS[i:i+slots_needed]
+
+            if len(required_slots) < slots_needed:
+                continue
+
+            valid_sequence = True
+
+            for rs in required_slots:
+
+                hour,minute = map(int, rs.split(":"))
+
+                slot_dt = datetime.combine(check_date, datetime.min.time()).replace(
+                    hour=hour, minute=minute
+                )
+
+                if slot_dt <= now:
+                    valid_sequence = False
+                    break
+
+                slot_count = len(day_bookings[day_bookings["Time"] == rs])
+
+                if slot_count >= SLOT_CAPACITY:
+                    valid_sequence = False
+                    break
+
+            if valid_sequence:
+                available_slots.append(slot)
+
+        if available_slots:
+
+            return {
+                "status":"success",
+                "date":str(check_date),
+                "slots":available_slots,
+                "slots_needed":slots_needed,
+                "next_available_date":str(check_date),
+                "next_available_time":available_slots[0]
+            }
 
     return {
-        "status": "success",
-        "date": str(booking_date),
-        "slots": available_slots,
-        "next_available_date": str(booking_date),
-        "next_available_time": available_slots[0] if available_slots else None
+        "status":"no_slots",
+        "message":"No slots available in next 7 days"
     }
 
 
@@ -165,34 +176,28 @@ def create_booking(data: dict):
     booking_id = "U3-" + str(uuid.uuid4())[:6]
 
     booking = {
-        "Booking_ID": booking_id,
-        "Customer_Name": data.get("customer_name"),
-        "Vehicle": str(data.get("vehicle_brand")) + " " + str(data.get("vehicle_model")),
-        "Service": data.get("service_selected"),
-        "Price": data.get("service_price"),
-        "Date": data.get("service_date"),
-        "Time": data.get("service_time"),
-        "Pickup_Type": data.get("pickup_type"),
-        "Location": data.get("pickup_location"),
-        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "Booking_ID":booking_id,
+        "Customer_Name":data.get("customer_name"),
+        "Vehicle":str(data.get("vehicle_brand")) + " " + str(data.get("vehicle_model")),
+        "Service":data.get("service_selected"),
+        "Price":data.get("service_price"),
+        "Date":data.get("service_date"),
+        "Time":data.get("service_time"),
+        "Timestamp":datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
 
-    try:
-        df = pd.read_excel(DATABASE_FILE, sheet_name="Bookings")
-        df = pd.concat([df, pd.DataFrame([booking])], ignore_index=True)
+    df = pd.read_excel(DATABASE_FILE, sheet_name="Bookings")
+    df = pd.concat([df, pd.DataFrame([booking])], ignore_index=True)
 
-        with pd.ExcelWriter(
-            DATABASE_FILE,
-            engine="openpyxl",
-            mode="a",
-            if_sheet_exists="replace"
-        ) as writer:
-            df.to_excel(writer, sheet_name="Bookings", index=False)
-
-    except Exception as e:
-        return {"error": str(e)}
+    with pd.ExcelWriter(
+        DATABASE_FILE,
+        engine="openpyxl",
+        mode="a",
+        if_sheet_exists="replace"
+    ) as writer:
+        df.to_excel(writer, sheet_name="Bookings", index=False)
 
     return {
-        "booking_id": booking_id,
-        "status": "Booking created successfully"
+        "booking_id":booking_id,
+        "status":"Booking created successfully"
     }
