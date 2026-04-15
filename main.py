@@ -117,13 +117,29 @@ def price_check(data: dict):
 
 
 # ---------------- SLOT CHECK ----------------
+from datetime import datetime, timedelta
+
 @app.post("/api/slot-check")
 def slot_check(data: dict):
 
-    # Basic slot logic (can be improved later)
-    slots = ["09:00", "12:00", "15:00"]
+    # available slots in your workshop
+    slots = ["09:30", "12:30", "15:30", "18:00"]
 
-    return {"slots": slots}
+    today = datetime.now().date()
+
+    # find earliest available slot (simple version)
+    next_date = today
+    next_time = slots[0]
+
+    # convert to readable format
+    next_date_text = next_date.strftime("%d %b %Y")
+
+    return {
+        "status": "success",
+        "slots": slots,
+        "next_available_date": next_date_text,
+        "next_available_time": next_time
+    }
 
 
 # ---------------- CREATE BOOKING ----------------
