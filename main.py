@@ -122,25 +122,38 @@ from datetime import datetime, timedelta
 @app.post("/api/slot-check")
 def slot_check(data: dict):
 
-    # available slots in your workshop
+    if bookings_df is None:
+        return {"error": "booking database missing"}
+
+    # available slots
     slots = ["09:30", "12:30", "15:30", "18:00"]
 
-    today = datetime.now().date()
+    # each slot capacity (3 bays)
+    slot_capacity = 3
 
-    # find earliest available slot (simple version)
-    next_date = today
-    next_time = slots[0]
+    # get selected day offset
+    offset = data.get("day_offset", 0)
 
-    # convert to readable format
-    next_date_text = next_date.strftime("%d %b %Y")
+    booking_date = datetime.now().date() + timedelta(days=int(offset))
+    booking_date_str = booking_date.strftime("%Y-%m-%d")
+
+    # filter bookings for selected date
+    day_bookings = bookings_df[bookings_df["Date"] == booking_date_str]
+
+    available_slots = []
+
+    for slot in slots:
+
+        slot_count = len(day_bookings[day_bookings["Time"] == slot])
+
+        if slot_count < slot_capacity:
+            available_slots.append(slot)
 
     return {
         "status": "success",
-        "slots": slots,
-        "next_available_date": next_date_text,
-        "next_available_time": next_time
+        "date": booking_date_str,
+        "slots": available_slots
     }
-
 
 # ---------------- CREATE BOOKING ----------------
 @app.post("/api/create-booking")
