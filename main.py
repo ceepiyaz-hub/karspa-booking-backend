@@ -115,7 +115,6 @@ def price_check(data: dict):
         "highlights": highlights
     }
 
-
 # ---------------- SLOT CHECK ----------------
 from datetime import datetime, timedelta
 
