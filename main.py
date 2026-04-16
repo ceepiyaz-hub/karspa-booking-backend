@@ -95,7 +95,6 @@ def price_check(data: dict):
 @app.post("/api/slot-check")
 def slot_check(data: dict):
 
-    # reload bookings every request
     bookings_df = pd.read_excel(DATABASE_FILE, sheet_name="Bookings")
     bookings_df["Date"] = pd.to_datetime(bookings_df["Date"]).dt.date
 
@@ -104,15 +103,22 @@ def slot_check(data: dict):
 
     service_name = data.get("service_selected")
 
-    # determine service duration
     service_row = duration_df[duration_df["Service Name"] == service_name]
     duration_hours = int(service_row.iloc[0]["Duration (Hours)"])
 
-    # calculate how many slots needed
     slots_needed = max(1, math.ceil(duration_hours / SLOT_DURATION_HOURS))
 
     offset = int(data.get("day_offset",0))
     start_date = today + timedelta(days=offset)
+
+    # skip today if working hours finished
+    last_slot_hour, last_slot_min = map(int, SLOTS[-1].split(":"))
+    last_slot_today = datetime.combine(today, datetime.min.time()).replace(
+        hour=last_slot_hour, minute=last_slot_min
+    )
+
+    if now > last_slot_today:
+        start_date = today + timedelta(days=1)
 
     for day in range(7):
 
@@ -123,7 +129,6 @@ def slot_check(data: dict):
 
         for i,slot in enumerate(SLOTS):
 
-            # check if enough continuous slots exist
             required_slots = SLOTS[i:i+slots_needed]
 
             if len(required_slots) < slots_needed:
@@ -139,7 +144,8 @@ def slot_check(data: dict):
                     hour=hour, minute=minute
                 )
 
-                if slot_dt <= now:
+                # Only skip past slots if checking today
+                if check_date == today and slot_dt <= now:
                     valid_sequence = False
                     break
 
