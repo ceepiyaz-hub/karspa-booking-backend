@@ -4,6 +4,7 @@ import pandas as pd
 import uuid
 from datetime import datetime, timedelta
 import math
+import pytz
 
 app = FastAPI()
 
@@ -11,8 +12,11 @@ DATABASE_FILE = "database.xlsx"
 
 # ---------- SYSTEM CONFIG ----------
 SLOTS = ["09:30","12:30","15:30","18:00"]
-SLOT_CAPACITY = 3   # number of detailing bays
-SLOT_DURATION_HOURS = 3   # each slot roughly 3 hours
+SLOT_CAPACITY = 3
+SLOT_DURATION_HOURS = 3
+
+# ---------- TIMEZONE ----------
+tz = pytz.timezone("Asia/Kolkata")
 
 # ---------------- LOAD DATABASE ----------------
 def load_database():
@@ -98,7 +102,7 @@ def slot_check(data: dict):
     bookings_df = pd.read_excel(DATABASE_FILE, sheet_name="Bookings")
     bookings_df["Date"] = pd.to_datetime(bookings_df["Date"]).dt.date
 
-    now = datetime.now()
+    now = datetime.now(tz)
     today = now.date()
 
     service_name = data.get("service_selected")
@@ -111,7 +115,6 @@ def slot_check(data: dict):
     offset = int(data.get("day_offset",0))
     start_date = today + timedelta(days=offset)
 
-    # skip today if working hours finished
     last_slot_hour, last_slot_min = map(int, SLOTS[-1].split(":"))
     last_slot_today = datetime.combine(today, datetime.min.time()).replace(
         hour=last_slot_hour, minute=last_slot_min
@@ -144,8 +147,7 @@ def slot_check(data: dict):
                     hour=hour, minute=minute
                 )
 
-                # Only skip past slots if checking today
-                if check_date == today and slot_dt <= now:
+                if check_date == today and slot_dt <= now.replace(tzinfo=None):
                     valid_sequence = False
                     break
 
@@ -189,7 +191,7 @@ def create_booking(data: dict):
         "Price":data.get("service_price"),
         "Date":data.get("service_date"),
         "Time":data.get("service_time"),
-        "Timestamp":datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        "Timestamp":datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
     }
 
     df = pd.read_excel(DATABASE_FILE, sheet_name="Bookings")
