@@ -50,12 +50,10 @@ def vehicle_detect(data: dict):
         return {"status":"not_found"}
 
     for _,row in vehicle_df.iterrows():
-
         keywords = str(row["Model Keywords"]).lower()
 
         for keyword in keywords.split(","):
             if keyword.strip() in text:
-
                 return {
                     "status":"found",
                     "brand":row["Car Brands"],
@@ -73,14 +71,23 @@ def price_check(data: dict):
     category = data.get("vehicle_category")
     service = data.get("service_selected")
 
+    if not category or not service:
+        return {"error":"vehicle_category and service_selected required"}
+
     row = pricing_df[pricing_df["Car Category"] == category]
 
     if row.empty:
         return {"error":"category not found"}
 
+    if service not in pricing_df.columns:
+        return {"error":"service not found in pricing"}
+
     price = int(row.iloc[0][service])
 
     service_row = duration_df[duration_df["Service Name"] == service]
+
+    if service_row.empty:
+        return {"error":"service not found in duration"}
 
     duration = int(service_row.iloc[0]["Duration (Hours)"])
     description = service_row.iloc[0]["Description"]
@@ -95,7 +102,7 @@ def price_check(data: dict):
     }
 
 
-# ---------------- SMART SLOT ENGINE (DURATION AWARE) ----------------
+# ---------------- SMART SLOT ENGINE ----------------
 @app.post("/api/slot-check")
 def slot_check(data: dict):
 
@@ -107,17 +114,26 @@ def slot_check(data: dict):
 
     service_name = data.get("service_selected")
 
-    service_row = duration_df[duration_df["Service Name"] == service_name]
-    duration_hours = int(service_row.iloc[0]["Duration (Hours)"])
+    if not service_name:
+        return {"error":"service_selected required"}
 
+    service_row = duration_df[duration_df["Service Name"] == service_name]
+
+    if service_row.empty:
+        return {"error":"service not found"}
+
+    duration_hours = int(service_row.iloc[0]["Duration (Hours)"])
     slots_needed = max(1, math.ceil(duration_hours / SLOT_DURATION_HOURS))
 
     offset = int(data.get("day_offset",0))
     start_date = today + timedelta(days=offset)
 
+    # Skip today if all slots are over
     last_slot_hour, last_slot_min = map(int, SLOTS[-1].split(":"))
-    last_slot_today = datetime.combine(today, datetime.min.time()).replace(
-        hour=last_slot_hour, minute=last_slot_min
+    last_slot_today = tz.localize(
+        datetime.combine(today, datetime.min.time()).replace(
+            hour=last_slot_hour, minute=last_slot_min
+        )
     )
 
     if now > last_slot_today:
@@ -130,7 +146,7 @@ def slot_check(data: dict):
 
         available_slots = []
 
-        for i,slot in enumerate(SLOTS):
+        for i, slot in enumerate(SLOTS):
 
             required_slots = SLOTS[i:i+slots_needed]
 
@@ -141,13 +157,16 @@ def slot_check(data: dict):
 
             for rs in required_slots:
 
-                hour,minute = map(int, rs.split(":"))
+                hour, minute = map(int, rs.split(":"))
 
-                slot_dt = datetime.combine(check_date, datetime.min.time()).replace(
-                    hour=hour, minute=minute
+                slot_dt = tz.localize(
+                    datetime.combine(check_date, datetime.min.time()).replace(
+                        hour=hour, minute=minute
+                    )
                 )
 
-                if check_date == today and slot_dt <= now.replace(tzinfo=None):
+                # Skip past slots only for today
+                if check_date == today and slot_dt <= now:
                     valid_sequence = False
                     break
 
@@ -161,7 +180,6 @@ def slot_check(data: dict):
                 available_slots.append(slot)
 
         if available_slots:
-
             return {
                 "status":"success",
                 "date":str(check_date),
