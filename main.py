@@ -18,6 +18,42 @@ SLOT_DURATION_HOURS = 3
 tz = pytz.timezone("Asia/Kolkata")
 
 
+# ---------- DISPLAY FORMAT HELPERS ----------
+def format_date_with_suffix(date_obj):
+    """
+    Example:
+    2026-04-20 -> 20th April 2026
+    """
+    day = date_obj.day
+
+    if 11 <= day <= 13:
+        suffix = "th"
+    else:
+        suffix = {
+            1: "st",
+            2: "nd",
+            3: "rd"
+        }.get(day % 10, "th")
+
+    return f"{day}{suffix} {date_obj.strftime('%B %Y')}"
+
+
+def format_time_12hr(time_str):
+    """
+    Example:
+    18:00 -> 6:00 PM
+    09:30 -> 9:30 AM
+    """
+    if not time_str:
+        return ""
+
+    try:
+        time_obj = datetime.strptime(str(time_str).strip(), "%H:%M")
+        return time_obj.strftime("%I:%M %p").lstrip("0")
+    except Exception:
+        return str(time_str)
+
+
 # ---------------- LOAD DATABASE ----------------
 def load_database():
     vehicle_df = pd.read_excel(DATABASE_FILE, sheet_name="Vehicle_Database")
@@ -272,20 +308,23 @@ def slot_check(data: dict):
         if available_slots:
             return {
                 "status": "success",
-                "date": str(check_date),
+                "date": format_date_with_suffix(check_date),
 
-                # original array
-                "slots": available_slots,
+                # formatted array for UI
+                "slots": [
+                    format_time_12hr(slot)
+                    for slot in available_slots
+                ],
 
                 # WABIS-friendly fields
-                "slot_1": available_slots[0] if len(available_slots) > 0 else "",
-                "slot_2": available_slots[1] if len(available_slots) > 1 else "",
-                "slot_3": available_slots[2] if len(available_slots) > 2 else "",
-                "slot_4": available_slots[3] if len(available_slots) > 3 else "",
+                "slot_1": format_time_12hr(available_slots[0]) if len(available_slots) > 0 else "",
+                "slot_2": format_time_12hr(available_slots[1]) if len(available_slots) > 1 else "",
+                "slot_3": format_time_12hr(available_slots[2]) if len(available_slots) > 2 else "",
+                "slot_4": format_time_12hr(available_slots[3]) if len(available_slots) > 3 else "",
 
                 "slots_needed": slots_needed,
-                "next_available_date": str(check_date),
-                "next_available_time": available_slots[0]
+                "next_available_date": format_date_with_suffix(check_date),
+                "next_available_time": format_time_12hr(available_slots[0])
             }
 
     # no slots found
