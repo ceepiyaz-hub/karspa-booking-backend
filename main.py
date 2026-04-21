@@ -110,26 +110,20 @@ def home():
 
 @app.get("/api/latest-booking")
 def latest_booking():
-    """
-    Returns the latest row from Bookings sheet.
-    If something is wrong, returns a JSON error message instead of crashing.
-    """
     try:
+        import os
+
         if not os.path.exists(DATABASE_FILE):
             return {
                 "status": "error",
                 "message": f"{DATABASE_FILE} file not found"
             }
 
-        excel_file = pd.ExcelFile(DATABASE_FILE)
+        df = pd.read_excel(
+            DATABASE_FILE,
+            sheet_name="Bookings"
+        )
 
-        if "Bookings" not in excel_file.sheet_names:
-            return {
-                "status": "error",
-                "message": f"Bookings sheet not found. Available sheets: {excel_file.sheet_names}"
-            }
-
-        df = pd.read_excel(DATABASE_FILE, sheet_name="Bookings")
         df.columns = df.columns.str.strip()
 
         if df.empty:
@@ -138,17 +132,27 @@ def latest_booking():
                 "message": "No bookings found"
             }
 
-        latest = df.tail(1).to_dict(orient="records")[0]
+        latest_row = df.tail(1).fillna("").iloc[0]
+
+        latest_booking_data = {}
+
+        for column in df.columns:
+            value = latest_row[column]
+
+            if pd.isna(value):
+                latest_booking_data[column] = ""
+            else:
+                latest_booking_data[column] = str(value)
 
         return {
             "status": "success",
-            "latest_booking": latest
+            "latest_booking": latest_booking_data
         }
 
     except Exception as e:
         return {
             "status": "error",
-            "message": f"Failed to fetch latest booking: {str(e)}"
+            "message": f"Latest booking failed: {str(e)}"
         }
 
 
