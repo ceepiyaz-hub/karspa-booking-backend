@@ -86,7 +86,27 @@ def home():
 @app.get("/api/latest-booking")
 def latest_booking():
     try:
-        df = pd.read_excel(DATABASE_FILE, sheet_name="Bookings")
+        import os
+
+        if not os.path.exists(DATABASE_FILE):
+            return {
+                "status": "error",
+                "message": f"{DATABASE_FILE} file not found"
+            }
+
+        excel_file = pd.ExcelFile(DATABASE_FILE)
+
+        if "Bookings" not in excel_file.sheet_names:
+            return {
+                "status": "error",
+                "message": f"Bookings sheet not found. Available sheets: {excel_file.sheet_names}"
+            }
+
+        df = pd.read_excel(
+            DATABASE_FILE,
+            sheet_name="Bookings"
+        )
+
         df.columns = df.columns.str.strip()
 
         if df.empty:
@@ -105,7 +125,7 @@ def latest_booking():
     except Exception as e:
         return {
             "status": "error",
-            "message": f"Failed to fetch latest booking: {str(e)}"
+            "message": str(e)
         }
 
 
