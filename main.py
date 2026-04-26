@@ -159,6 +159,59 @@ def latest_booking():
 # =========================================================
 # VEHICLE DETECTION API
 # =========================================================
+
+
+@app.get("/api/view-bookings")
+def view_bookings():
+    try:
+        if not os.path.exists(DATABASE_FILE):
+            return {
+                "status": "error",
+                "message": f"{DATABASE_FILE} file not found"
+            }
+
+        df = pd.read_excel(
+            DATABASE_FILE,
+            sheet_name="Bookings"
+        )
+
+        df.columns = df.columns.str.strip()
+
+        if df.empty:
+            return {
+                "status": "error",
+                "message": "No bookings found"
+            }
+
+        df = df.fillna("")
+        records = []
+
+        for _, row in df.iterrows():
+            item = {}
+
+            for column in df.columns:
+                value = row[column]
+
+                if pd.isna(value):
+                    item[column] = ""
+                else:
+                    item[column] = str(value)
+
+            records.append(item)
+
+        return {
+            "status": "success",
+            "total_bookings": len(records),
+            "bookings": records
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"View bookings failed: {str(e)}"
+        }
+
+
 @app.post("/api/vehicle-detect")
 def vehicle_detect(data: dict):
     try:
