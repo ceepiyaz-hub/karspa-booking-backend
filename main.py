@@ -93,12 +93,11 @@ def save_to_google_sheet(booking):
             str(booking.get("Timestamp", ""))
         ])
 
-        return True
+        return True, ""
 
     except Exception as e:
-    return {
-        "google_error": str(e)
-    }
+        print(f"GOOGLE SHEET SAVE ERROR: {str(e)}")
+        return False, str(e)
 
 
 # ---------------- LOAD DATABASE ----------------
