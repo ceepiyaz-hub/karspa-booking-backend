@@ -93,11 +93,13 @@ def save_to_google_sheet(booking):
         sheet.append_row([
             str(booking.get("Booking_ID", "")),
             str(booking.get("Customer_Name", "")),
+            str(booking.get("Phone_Number", "")),
             str(booking.get("Vehicle", "")),
             str(booking.get("Service", "")),
             str(booking.get("Price", "")),
             str(booking.get("Date", "")),
             str(booking.get("Time", "")),
+            str(booking.get("Status", "")),
             str(booking.get("Timestamp", ""))
         ])
 
@@ -507,6 +509,7 @@ def create_booking(data: dict):
     try:
         required_fields = [
             "customer_name",
+            "phone_number",
             "vehicle_brand",
             "vehicle_model",
             "service_selected",
@@ -543,11 +546,13 @@ def create_booking(data: dict):
         booking = {
             "Booking_ID": booking_id,
             "Customer_Name": data.get("customer_name"),
+            "Phone_Number": data.get("phone_number"),
             "Vehicle": f"{data.get('vehicle_brand')} {data.get('vehicle_model')}",
             "Service": data.get("service_selected"),
             "Price": data.get("service_price"),
             "Date": raw_date,
             "Time": raw_time,
+            "Status": "New Booking",
             "Timestamp": datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
         }
 
