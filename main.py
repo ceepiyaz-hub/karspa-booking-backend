@@ -74,16 +74,17 @@ def save_to_google_sheet(booking):
             "https://www.googleapis.com/auth/drive"
         ]
 
-import json
+        google_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 
-service_account_info = json.loads(
-    os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
-)
+        if not google_json:
+            return False, "GOOGLE_SERVICE_ACCOUNT_JSON not found"
 
-creds = Credentials.from_service_account_info(
-    service_account_info,
-    scopes=scope
-)
+        service_account_info = json.loads(google_json)
+
+        creds = Credentials.from_service_account_info(
+            service_account_info,
+            scopes=scope
+        )
 
         client = gspread.authorize(creds)
         sheet = client.open("U3 Bookings CRM").worksheet("Bookings")
@@ -102,7 +103,6 @@ creds = Credentials.from_service_account_info(
         return True, ""
 
     except Exception as e:
-        print(f"GOOGLE SHEET SAVE ERROR: {str(e)}")
         return False, str(e)
 
 
