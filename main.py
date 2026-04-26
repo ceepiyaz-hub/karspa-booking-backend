@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import math
 import pytz
 import os
+import json
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -585,12 +586,13 @@ def create_booking(data: dict):
                 "message": "Booking was not saved to database"
             }
 
-        google_sheet_saved = save_to_google_sheet(booking)
+        google_sheet_saved, google_error = save_to_google_sheet(booking)
 
         return {
             "status": "success",
             "booking_id": booking_id,
             "google_sheet_saved": google_sheet_saved,
+            "google_error": google_error,
             "message": "Booking created successfully"
         }
 
