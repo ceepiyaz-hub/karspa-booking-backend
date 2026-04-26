@@ -74,10 +74,16 @@ def save_to_google_sheet(booking):
             "https://www.googleapis.com/auth/drive"
         ]
 
-        creds = Credentials.from_service_account_file(
-            "service-account.json",
-            scopes=scope
-        )
+import json
+
+service_account_info = json.loads(
+    os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+)
+
+creds = Credentials.from_service_account_info(
+    service_account_info,
+    scopes=scope
+)
 
         client = gspread.authorize(creds)
         sheet = client.open("U3 Bookings CRM").worksheet("Bookings")
