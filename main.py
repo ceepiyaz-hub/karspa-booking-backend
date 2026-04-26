@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 import math
 import pytz
 import os
+import gspread
+from google.oauth2.service_account import Credentials
 
 app = FastAPI()
 
@@ -61,6 +63,41 @@ def safe_int(value, default=0):
         return int(value)
     except Exception:
         return default
+
+
+
+# ---------- GOOGLE SHEETS CRM ----------
+def save_to_google_sheet(booking):
+    try:
+        scope = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+
+        creds = Credentials.from_service_account_file(
+            "service-account.json",
+            scopes=scope
+        )
+
+        client = gspread.authorize(creds)
+        sheet = client.open("U3 Bookings CRM").worksheet("Bookings")
+
+        sheet.append_row([
+            str(booking.get("Booking_ID", "")),
+            str(booking.get("Customer_Name", "")),
+            str(booking.get("Vehicle", "")),
+            str(booking.get("Service", "")),
+            str(booking.get("Price", "")),
+            str(booking.get("Date", "")),
+            str(booking.get("Time", "")),
+            str(booking.get("Timestamp", ""))
+        ])
+
+        return True
+
+    except Exception as e:
+        print(f"GOOGLE SHEET SAVE ERROR: {str(e)}")
+        return False
 
 
 # ---------------- LOAD DATABASE ----------------
@@ -542,9 +579,12 @@ def create_booking(data: dict):
                 "message": "Booking was not saved to database"
             }
 
+        google_sheet_saved = save_to_google_sheet(booking)
+
         return {
             "status": "success",
             "booking_id": booking_id,
+            "google_sheet_saved": google_sheet_saved,
             "message": "Booking created successfully"
         }
 
