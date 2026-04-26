@@ -440,6 +440,9 @@ def create_booking(data: dict):
         # if caller accidentally sends display date, it will still be stored as received
         raw_date = data.get("service_date")
 
+        if not raw_date:
+            raw_date = datetime.now(tz).strftime("%Y-%m-%d")
+
         booking = {
             "Booking_ID": booking_id,
             "Customer_Name": data.get("customer_name"),
