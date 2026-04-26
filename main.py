@@ -96,8 +96,8 @@ def save_to_google_sheet(booking):
         return True
 
     except Exception as e:
-    print(f"GOOGLE SHEET SAVE ERROR: {str(e)}")
-    return False
+        print(f"GOOGLE SHEET SAVE ERROR: {str(e)}")
+        return False
 
 
 # ---------------- LOAD DATABASE ----------------
